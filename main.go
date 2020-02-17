@@ -8,7 +8,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/kickico/abi"
+	"github.com/emikhalev/kickico/abi"
 )
 
 const (
@@ -21,7 +21,7 @@ const (
 type params struct {
 	list   bool
 	method string
-	params []interface{}
+	params string
 }
 
 var (
@@ -31,13 +31,14 @@ var (
 func init() {
 	flag.BoolVar(&execParams.list, "list", false, "List contract methods")
 	flag.StringVar(&execParams.method, "method", "", "Contract method name to call")
+	flag.StringVar(&execParams.params, "p", "", "Input parameters to call function (if any)")
 }
 
 func main() {
 
 	flag.Parse()
 
-	inst, err := abi.NewABI(contractABI, infuraURL)
+	inst, err := abi.NewABI(contractABI, infuraURL, smartContractAddr)
 	if err != nil {
 		log.Fatalf("cannot load ABI: %v", err)
 	}
@@ -49,8 +50,8 @@ func main() {
 
 	method := strings.TrimSpace(execParams.method)
 	if method != "" {
-		execParams.params, err = inst.FlagMethodParams(method)
-		if err!=nil {
+		params, err := inst.ParseParameters(method, execParams.params)
+		if err != nil {
 			log.Fatalf("cannot read parameters: %v", err)
 		}
 		flag.Parse()
@@ -58,11 +59,19 @@ func main() {
 		ctx, cancelFn := context.WithTimeout(context.Background(), callMethodTimeout)
 		defer cancelFn()
 
-		result, err := inst.CallMethod(ctx, execParams.method, execParams.params)
+		result, err := inst.CallMethod(ctx, method, params...)
 		if err != nil {
 			log.Fatalf("cannot call ABI: %v", err)
 		}
-		fmt.Printf("Call method %s returns: %#v", method, result)
+
+		fmt.Printf("Call method %s return\n", method)
+		for k, v := range result {
+			if k == "" {
+				k = "<unnamed>"
+			}
+			fmt.Printf("%s: %v\n", k, v)
+		}
+
 		return
 	}
 
@@ -73,6 +82,6 @@ func printUsage() {
 	println("")
 	println("Usage:")
 	println("  -list - list contract methods")
-	println("  -method=<methodName> -<paramName1>=<paramValue1> -<paramName2>=<paramValue2> ... - call contract method with parameters (i.e. -method=disableManuallyBurnTokens -_disable=false)")
+	println("  -method=<methodName> -p=<parameters separated with comma> - call contract method with parameters (i.e. -method=disableManuallyBurnTokens -p=false)")
 	println("")
 }

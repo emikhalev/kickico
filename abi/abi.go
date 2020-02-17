@@ -3,23 +3,25 @@ package abi
 import (
 	"bytes"
 	"context"
-	"flag"
 	"fmt"
-	"github.com/pkg/errors"
-	"io/ioutil"
-
 	"github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/ethclient"
+	"github.com/pkg/errors"
+	"io/ioutil"
+	"math/big"
+	"strconv"
+	"strings"
 )
 
 type ABI struct {
-	abi *abi.ABI
-	url string
+	abi               *abi.ABI
+	url               string
+	smartContractAddr string
 }
 
-func NewABI(contractABI string, url string) (*ABI, error) {
+func NewABI(contractABI, url, smartContractAddr string) (*ABI, error) {
 	abiContent, err := ioutil.ReadFile(contractABI)
 	if err != nil {
 		return nil, err
@@ -31,8 +33,9 @@ func NewABI(contractABI string, url string) (*ABI, error) {
 	}
 
 	return &ABI{
-		abi: &cABI,
-		url: url,
+		abi:               &cABI,
+		url:               url,
+		smartContractAddr: smartContractAddr,
 	}, nil
 }
 
@@ -43,41 +46,6 @@ func (a *ABI) PrintMethods() {
 	}
 }
 
-func (a *ABI) FlagMethodParams(method string) ([]interface{}, error) {
-	m, ok := a.abi.Methods[method]
-	if !ok {
-		return nil, errors.New("method not found")
-	}
-
-	p := make([]interface{}, len(m.Inputs))
-
-	for idx, o := range m.Inputs {
-		switch o.Type.T {
-		case abi.IntTy:
-			p[idx] = flag.Int64(o.Name, 0, "")
-		case abi.UintTy:
-			p[idx] = flag.Uint64(o.Name, 0, "")
-		case abi.BoolTy:
-			p[idx] = flag.Bool(o.Name, false, "")
-		case abi.SliceTy:
-			p[idx] = flag.String(o.Name, "", "")
-		case abi.ArrayTy:
-			p[idx] = flag.String(o.Name, "", "")
-		case abi.TupleTy: // TODO: not implemented
-		case abi.AddressTy:
-			p[idx] = flag.String(o.Name, "", "")
-		case abi.FixedBytesTy:
-			p[idx] = flag.String(o.Name, "", "")
-		case abi.BytesTy: // TODO: not implemented
-		case abi.HashTy: // TODO: not implemented
-		case abi.FixedPointTy: // TODO: not implemented
-		case abi.FunctionTy: // TODO: not implemented
-		}
-	}
-
-	return p, nil
-}
-
 func (a *ABI) CallMethod(ctx context.Context, method string, params ...interface{}) (map[string]interface{}, error) {
 	client, err := ethclient.Dial(a.url)
 	if err != nil {
@@ -85,9 +53,9 @@ func (a *ABI) CallMethod(ctx context.Context, method string, params ...interface
 	}
 
 	// Prepare data for eth_call
-	address := common.HexToAddress(smartContractAddr)
+	address := common.HexToAddress(a.smartContractAddr)
 
-	methodData, err := a.packCallMethodData(method, params)
+	methodData, err := a.packCallMethodData(method, params...)
 	if err != nil {
 		return nil, errors.Errorf("packCallMethodData error: %v", err)
 	}
@@ -98,6 +66,13 @@ func (a *ABI) CallMethod(ctx context.Context, method string, params ...interface
 		Data: methodData,
 	}, nil)
 
+	if err == nil && len(result) == 0 {
+		if code, err := client.CodeAt(ctx, address, nil); err != nil {
+			return nil, err
+		} else if len(code) == 0 {
+			return nil, errors.New("contract code empty")
+		}
+	}
 	if err != nil {
 		return nil, fmt.Errorf("call method returns error: %v", err)
 	}
@@ -108,6 +83,54 @@ func (a *ABI) CallMethod(ctx context.Context, method string, params ...interface
 	}
 
 	return r, nil
+}
+
+func (a *ABI) ParseParameters(method, params string) ([]interface{}, error) {
+	m, ok := a.abi.Methods[method]
+	if !ok {
+		return nil, errors.New("method not found")
+	}
+
+	p := make([]interface{}, len(m.Inputs))
+	iP := strings.Split(params, ",")
+
+	if len(iP) < len(m.Inputs) {
+		return nil, errors.New("not all parameters set")
+	}
+
+	for idx, o := range m.Inputs {
+		switch o.Type.T {
+		case abi.IntTy, abi.UintTy:
+			pv, err := strconv.ParseUint(iP[idx], 10, 64)
+			if err != nil {
+				return nil, fmt.Errorf("cannot parse parametes: %s (type: %v, index: %d)", o.Name, o.Type, idx)
+			}
+			p[idx] = big.NewInt(int64(pv))
+		case abi.BoolTy: //TODO: Check
+			v, err := strconv.ParseBool(iP[idx])
+			if err != nil {
+				return nil, fmt.Errorf("cannot parse parametes: %s (type: %v, index: %d)", o.Name, o.Type, idx)
+			}
+			p[idx] = v
+		case abi.SliceTy: //TODO: slice
+		case abi.ArrayTy: //TODO: array
+		case abi.TupleTy: // TODO: struct
+		case abi.AddressTy: //TODO: Check
+			var v [20]byte
+			copy(v[:], iP[idx])
+			p[idx] = v
+		case abi.FixedBytesTy: // TODO: Array
+		case abi.BytesTy: //TODO: Check
+			v := make([]byte, len(iP[idx]))
+			copy(v, iP[idx])
+			p[idx] = v
+		case abi.HashTy: // TODO: not implemented
+		case abi.FixedPointTy: // TODO: not implemented
+		case abi.FunctionTy: // TODO: not implemented
+		}
+	}
+
+	return p, nil
 }
 
 func (a *ABI) sprintArguments(args abi.Arguments) string {
@@ -122,7 +145,7 @@ func (a *ABI) sprintArguments(args abi.Arguments) string {
 }
 
 func (a *ABI) packCallMethodData(method string, args ...interface{}) ([]byte, error) {
-	data, err := a.abi.Pack(method, args)
+	data, err := a.abi.Pack(method, args...)
 	if err != nil {
 		return nil, fmt.Errorf("cannot pack method call data: %v", err)
 	}

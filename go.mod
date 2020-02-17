@@ -14,7 +14,3 @@ require (
 	golang.org/x/crypto v0.0.0-20200210222208-86ce3cb69678 // indirect
 	golang.org/x/sys v0.0.0-20200202164722-d101bd2416d5 // indirect
 )
-
-replace github.com/emikhalev/kickico/contracts/cstoken => ./constracts/cstoken
-
-replace github.com/emikhalev/kickico/abi => ./abi
