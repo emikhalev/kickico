@@ -6,22 +6,16 @@ import (
 	"fmt"
 	"log"
 	"strings"
-	"time"
 
-	"github.com/emikhalev/kickico/abi"
-)
-
-const (
-	contractABI       = "contracts/CSToken.json"
-	smartContractAddr = "0x27695e09149adc738a978e9a678f99e4c39e9eb9"
-	infuraURL         = "https://mainnet.infura.io/v3/8f81eca071e245e6934ad24b23c722d0"
-	callMethodTimeout = 30 * time.Second
+	"github.com/emikhalev/kickico/internal/abi"
+	"github.com/emikhalev/kickico/internal/config"
 )
 
 type params struct {
-	list   bool
-	method string
-	params string
+	configPath string
+	list       bool
+	method     string
+	params     string
 }
 
 var (
@@ -29,34 +23,32 @@ var (
 )
 
 func init() {
+	flag.StringVar(&execParams.configPath, "config", "configs/config.yaml", "config file (default: configs/config.yaml")
 	flag.BoolVar(&execParams.list, "list", false, "List contract methods")
 	flag.StringVar(&execParams.method, "method", "", "Contract method name to call")
 	flag.StringVar(&execParams.params, "p", "", "Input parameters to call function (if any)")
 }
 
 func main() {
-
 	flag.Parse()
 
-	inst, err := abi.NewABI(contractABI, infuraURL, smartContractAddr)
-	if err != nil {
-		log.Fatalf("cannot load ABI: %v", err)
-	}
-
 	if execParams.list {
+		inst := loadABI(loadConfig(execParams.configPath))
 		inst.PrintMethods()
 		return
 	}
 
 	method := strings.TrimSpace(execParams.method)
 	if method != "" {
+		cfg := loadConfig(execParams.configPath)
+		inst := loadABI(cfg)
+
 		params, err := inst.ParseParameters(method, execParams.params)
 		if err != nil {
 			log.Fatalf("cannot read parameters: %v", err)
 		}
-		flag.Parse()
 
-		ctx, cancelFn := context.WithTimeout(context.Background(), callMethodTimeout)
+		ctx, cancelFn := context.WithTimeout(context.Background(), cfg.CallMethodTimeout)
 		defer cancelFn()
 
 		result, err := inst.CallMethod(ctx, method, params...)
@@ -78,10 +70,27 @@ func main() {
 	printUsage()
 }
 
+func loadABI(cfg *config.Config) *abi.ABI {
+	inst, err := abi.NewABI(cfg.ContractABI, cfg.InfuraURL, cfg.SmartContractAddress)
+	if err != nil {
+		log.Fatalf("cannot load ABI: %v", err)
+	}
+	return inst
+}
+
+func loadConfig(path string) *config.Config {
+	cfg, err := config.NewConfig(path)
+	if err != nil {
+		log.Fatalf("cannot load config: %v", err)
+	}
+	return cfg
+}
+
 func printUsage() {
 	println("")
 	println("Usage:")
 	println("  -list - list contract methods")
 	println("  -method=<methodName> -p=<parameters separated with comma> - call contract method with parameters (i.e. -method=disableManuallyBurnTokens -p=false)")
+	println("  -config=<path to config file> - to set alternative config file (default: configs/config.yaml_")
 	println("")
 }

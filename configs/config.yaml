@@ -1,0 +1,4 @@
+ContractABI: contracts/CSToken.json
+SmartContractAddress: 0x27695e09149adc738a978e9a678f99e4c39e9eb9
+InfuraURL: https://mainnet.infura.io/v3/8f81eca071e245e6934ad24b23c722d0
+CallMethodTimeout: 30s

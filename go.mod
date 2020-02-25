@@ -11,6 +11,7 @@ require (
 	github.com/ethereum/go-ethereum v1.9.10
 	github.com/go-ole/go-ole v1.2.4 // indirect
 	github.com/pkg/errors v0.9.1
+	github.com/spf13/viper v1.6.2
 	golang.org/x/crypto v0.0.0-20200210222208-86ce3cb69678 // indirect
 	golang.org/x/sys v0.0.0-20200202164722-d101bd2416d5 // indirect
 )
