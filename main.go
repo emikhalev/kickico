@@ -23,7 +23,7 @@ var (
 )
 
 func init() {
-	flag.StringVar(&execParams.configPath, "config", "configs/config.yaml", "config file (default: configs/config.yaml")
+	flag.StringVar(&execParams.configPath, "config", "configs/config.yaml", "config file (default: configs/config.yaml)")
 	flag.BoolVar(&execParams.list, "list", false, "List contract methods")
 	flag.StringVar(&execParams.method, "method", "", "Contract method name to call")
 	flag.StringVar(&execParams.params, "p", "", "Input parameters to call function (if any)")
