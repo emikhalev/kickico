@@ -15,9 +15,13 @@ Configuration file located in ```configs/config.yaml```
 You can use following parameters:
 
 ```ContractABI``` - path to contract ABI file
+
 ```SmartContractAddress``` - address of the smart contract
+
 ```InfuraURL``` - infura URL of the smart contract
+
 ```CallMethodTimeout``` - timeout for method calling
+
 
 Commands
 ---
